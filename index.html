@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14161a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ponto Rápido</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png?v=2">
+<link rel="apple-touch-icon" href="icons/icon-192.png?v=2">
+<style>
+  :root{--bg:#14161a;--card:#1d2026;--line:#2c3038;--ink:#f4f1ea;--mute:#9aa0aa;--acc:#ff8a3d;--ok:#47c78a;--err:#ff5c5c}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom))}
+  .card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px}
+  h1{font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 18px;font-weight:600}
+  .clock{font-variant-numeric:tabular-nums;font-size:52px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .date{color:var(--mute);margin:6px 0 22px}
+  label{display:block;font-size:13px;color:var(--mute);margin:14px 0 6px}
+  input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:#121418;color:var(--ink);font-size:17px;outline:none}
+  input:focus{border-color:var(--acc)}
+  button{width:100%;border:0;border-radius:14px;padding:15px;font-size:17px;font-weight:700;cursor:pointer;margin-top:18px}
+  .primary{background:var(--acc);color:#1a1006}
+  .ghost{background:transparent;color:var(--mute);border:1px solid var(--line);font-weight:500;padding:12px;margin-top:10px}
+  button:disabled{opacity:.5;cursor:default}
+  .primary.cooling{opacity:1;color:var(--mute);font-variant-numeric:tabular-nums;
+    background:linear-gradient(90deg,#3a3f48 var(--p,0%),#2a2e35 var(--p,0%))}
+  .ring{position:relative;width:132px;height:132px;margin:4px auto 6px}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .n{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:700}
+  .hint{text-align:center;color:var(--mute);font-size:14px;margin:6px 0 0}
+  .status{margin-top:16px;padding:12px 14px;border-radius:12px;font-size:15px;display:none}
+  .status.show{display:block}
+  .status.ok{background:rgba(71,199,138,.12);color:var(--ok)}
+  .status.err{background:rgba(255,92,92,.12);color:var(--err)}
+  .status.info{background:rgba(255,255,255,.05);color:var(--mute)}
+  details{margin-top:14px;color:var(--mute);font-size:14px}
+  summary{cursor:pointer}
+  .who{color:var(--mute);font-size:14px;margin-top:-12px;margin-bottom:14px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 0;font-size:15px;color:var(--ink);cursor:pointer}
+  .toggle input{position:absolute;opacity:0;width:1px;height:1px}
+  .toggle .sw{position:relative;flex:none;width:46px;height:28px;border-radius:14px;background:#2c3038;transition:background .15s}
+  .toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--mute);transition:transform .15s,background .15s}
+  .toggle input:checked + .sw{background:var(--acc)}
+  .toggle input:checked + .sw::after{transform:translateX(18px);background:#1a1006}
+  .toggle input:focus-visible + .sw{outline:2px solid var(--acc);outline-offset:2px}
+  .last{color:var(--mute);font-size:13px;text-align:center;margin-top:14px}
+  .today{color:var(--mute);font-size:13px;text-align:center;margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.6}
+  .today div{display:block}
+  .today b{color:var(--ink);font-weight:600}
+  .today .total{font-weight:700;color:var(--acc)}
+  .today .busy{position:relative}
+  .today .busy::before{content:"";position:absolute;left:-17px;top:50%;width:9px;height:9px;margin-top:-6px;
+    border:1.5px solid var(--mute);border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .today .today-note{color:var(--mute);font-style:italic}
+  .today .total.open{color:var(--mute)}
+  .today .total.open::after{content:"";display:inline-block;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--ok);vertical-align:middle;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.25}}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Ponto Rápido</h1>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="date" id="date"></div>
+
+    <!-- Primeiro acesso -->
+    <form id="setup" hidden autocomplete="off">
+      <label for="code">Código do Empregador</label>
+      <input id="code" required autocapitalize="characters" spellcheck="false">
+      <label for="pin">PIN</label>
+      <input id="pin" required inputmode="numeric" type="password" autocomplete="off">
+      <details>
+        <summary>Avançado</summary>
+        <label for="api">Endereço da API</label>
+        <input id="api" spellcheck="false">
+        <label for="auth">Authorization (deixe vazio — é gerado automaticamente)</label>
+        <input id="auth" spellcheck="false" placeholder="Basic ...">
+      </details>
+      <button class="primary" type="submit" id="saveBtn">Salvar</button>
+    </form>
+
+    <!-- Acessos seguintes -->
+    <section id="run" hidden>
+      <div class="who" id="who"></div>
+      <div class="ring" id="ringWrap">
+        <svg width="132" height="132" viewBox="0 0 132 132">
+          <circle cx="66" cy="66" r="58" fill="none" stroke="#2c3038" stroke-width="8"/>
+          <circle id="arc" cx="66" cy="66" r="58" fill="none" stroke="#ff8a3d" stroke-width="8" stroke-linecap="round"/>
+        </svg>
+        <div class="n" id="count">5</div>
+      </div>
+      <p class="hint" id="hint">Registrando automaticamente… toque para cancelar</p>
+      <button class="primary" id="punchBtn">Bater ponto agora</button>
+      <button class="ghost" id="editBtn">Alterar credenciais</button>
+      <label class="toggle">
+        <span>Registro automático ao abrir</span>
+        <input type="checkbox" id="autoToggle" role="switch">
+        <span class="sw" aria-hidden="true"></span>
+      </label>
+    </section>
+
+    <div class="status" id="status"></div>
+    <div class="last" id="last"></div>
+    <div class="today" id="today" hidden></div>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  const AUTO_SECONDS = 5;
+  const MIN_GAP_MS = 1 * 60 * 1000;          // não registra automaticamente se houve batida há < 1 min
+  const DEFAULT_API = window.PONTO_API || './tg';   // config.js (Worker) ou proxy no mesmo domínio
+  const KEY = 'ponto-rapido:v1';
+  const $ = id => document.getElementById(id);
+
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch { return null; } };
+  const save = c => { try { localStorage.setItem(KEY, JSON.stringify(c)); } catch {} };
+
+  // Relógio
+  const tick = () => {
+    const d = new Date();
+    $('clock').textContent = d.toLocaleTimeString('pt-BR');
+    const ds = d.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' });
+    $('date').textContent = ds.charAt(0).toUpperCase() + ds.slice(1);
+  };
+  tick(); setInterval(tick, 1000);
+
+  const status = (msg, kind='info') => { const s=$('status'); s.textContent=msg; s.className='status show '+kind; };
+  const showLast = c => {
+    $('last').textContent = c && c.lastPunch
+      ? `Última batida: ${new Date(c.lastPunch.at).toLocaleString('pt-BR')} — ${c.lastPunch.label}` : '';
+  };
+
+  // Valores confirmados de tipoRetornoRegistroApontamentoEnum. Os desconhecidos aparecem crus na tela.
+  // Depuração pelo console: ponto.last() mostra a última resposta do servidor.
+  window.ponto = { last: () => (load() || {}).lastResponse };
+
+  const LABELS = {
+    NOVO_PONTO_ABERTO: 'Entrada registrada',
+  };
+  const labelFor = tipo => LABELS[tipo] || (tipo ? `Ponto registrado (${tipo})` : 'Ponto registrado');
+
+  // Só confere código + PIN (não registra ponto).
+  async function verifyEmployee(c) {
+    const base = (c.api || DEFAULT_API).replace(/\/+$/, '');
+    const code = encodeURIComponent(c.code), pin = encodeURIComponent(c.pin);
+    const r1 = await fetch(`${base}/fingerprintWS/funcionario/empregador/${code}/pin/${pin}`, {
+      cache:'no-store', headers:{ 'empregador': c.code, 'pin': c.pin }
+    });
+    if (!r1.ok) throw new Error(`Falha ao verificar funcionário (HTTP ${r1.status})`);
+    const user = await r1.json();
+    if (user.status !== 'SUCCESS' || !user.funcionario) throw new Error('Código do empregador ou PIN inválido.');
+    return user;
+  }
+
+  async function punch(c) {
+    const base = (c.api || DEFAULT_API).replace(/\/+$/, '');
+    const code = encodeURIComponent(c.code), pin = encodeURIComponent(c.pin);
+
+    status('Verificando funcionário…');
+    const user = await verifyEmployee(c);
+    const f = user.funcionario;
+
+    // Verificação de dispositivo (não bloqueante)
+    try {
+      await fetch(`${base}/autorizaDipositivoWS/verifica/web/empregador/${code}/pin/${pin}`, {
+        method:'POST', headers:{'Content-Type':'application/json; charset=UTF-8'}, body: JSON.stringify({ deviceId: null })
+      });
+    } catch {}
+
+    status('Registrando ponto…');
+    const headers = {
+      'Content-Type':'application/json',
+      'authorization': c.auth || ('Basic ' + btoa(`${f.id}:${c.code}`)),
+      'empregador': c.code,
+      'funcionarioid': String(f.id),
+      'username': String(f.id),
+      'pin': c.pin,
+    };
+
+    let r2;
+    try {
+    r2 = await fetch(`${base}/pontoWS/ponto/sincronizacaoPontos/1.2`, {
+      method:'POST', headers, cache:'no-store',
+      body: JSON.stringify({
+        horaInicio: '', deviceId: null, offline: 'false',
+        codigoEmpregador: c.code, pin: c.pin, horaFim: '', tipo: 'WEB', foto: '',
+        intervalo: '', validFingerprint: false, versao: 'registra-ponto-fingerprint',
+        plataforma: 'WEB', funcionarioId: Number(f.id), idAtividade: 6,
+        latitude: null, longitude: null, recaptcha: null
+      })
+    });
+    } catch (err) {
+      // O POST pode ter chegado ao servidor mesmo assim (resposta bloqueada pelo navegador).
+      const e = new Error('uncertain'); e.uncertain = true; e.name_ = f.nome; throw e;
+    }
+    if (!r2.ok) throw new Error(`Falha ao registrar (HTTP ${r2.status})`);
+    const res = await r2.json();
+    const tipo = res.tipoRetornoRegistroApontamentoEnum || '';
+    if (res.sucesso === false) throw new Error(tipo ? tipo.replace(/_/g,' ').toLowerCase() : 'Registro recusado pelo servidor.');
+
+    return { name: f.nome, label: labelFor(tipo), at: Date.now(), raw: { funcionario: user, ponto: res } };
+  }
+
+  async function doPunch(c, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const r = await punch(c);
+      c.name = r.name; c.lastPunch = { at: r.at, label: r.label }; c.lastResponse = r.raw; save(c);
+      console.log('[ponto] resposta do servidor:', r.raw);
+      status(`✓ ${r.label} às ${new Date(r.at).toLocaleTimeString('pt-BR')}`, 'ok');
+      if (navigator.vibrate && navigator.userActivation?.hasBeenActive) navigator.vibrate(80);
+      showLast(c);
+      startCooldown(c);
+      refreshTodayAfterPunch(c);
+      if ($('who')) $('who').textContent = r.name ? `Olá, ${r.name.split(' ')[0]}` : '';
+      return true;
+    } catch (e) {
+      if (e.uncertain) {
+        // Credenciais já foram validadas; trata como "provável" para o bloqueio de 1 min evitar batida dupla.
+        c.name = e.name_; c.lastPunch = { at: Date.now(), label: 'enviado, sem confirmação' }; save(c);
+        status('⚠ Ponto enviado, mas o navegador não conseguiu ler a confirmação. Confira no Tangerino (e-mail ou app) antes de tentar de novo.', 'info');
+        showLast(c);
+        startCooldown(c);
+        refreshTodayAfterPunch(c);
+        return true;
+      }
+      const msg = e instanceof TypeError ? 'Sem conexão com a API (rede ou CORS). Verifique o endereço em Avançado.' : e.message;
+      status('✗ ' + msg, 'err');
+      return false;
+    } finally { if (btn && !btn.classList.contains('cooling')) btn.disabled = false; }
+  }
+
+  // ---------- Primeiro acesso ----------
+  function showSetup(c) {
+    $('run').hidden = true; $('setup').hidden = false;
+    $('code').value = c?.code || ''; $('pin').value = c?.pin || '';
+    $('api').value = c?.api || DEFAULT_API; $('auth').value = c?.auth || '';
+    $('code').focus();
+  }
+  $('setup').addEventListener('submit', async e => {
+    e.preventDefault();
+    const prev = load() || {};
+    const c = { ...prev,
+      code: $('code').value.trim(), pin: $('pin').value.trim(),
+      api: ($('api').value.trim() === DEFAULT_API ? '' : $('api').value.trim()), auth: $('auth').value.trim() };
+    const btn = $('saveBtn'); btn.disabled = true;
+    try {
+      status('Verificando código e PIN…');
+      await verifyEmployee(c);
+      save(c);
+      status('✓ Credenciais salvas.', 'ok');
+      showRun(c, true);   // segue o fluxo normal: contagem de 5 s (se o registro automático estiver ligado)
+    } catch (err) {
+      status('✗ ' + (err instanceof TypeError ? 'Sem conexão com a API. Verifique sua internet.' : err.message), 'err');
+    } finally { btn.disabled = false; }
+  });
+
+  // ---------- Acessos seguintes ----------
+  let timer = null;
+  function cancelAuto(reason) {
+    if (!timer) return;
+    clearInterval(timer); timer = null;
+    $('ringWrap').hidden = true;
+    $('hint').textContent = reason || 'Registro automático cancelado.';
+    ['pointerdown','keydown','wheel','touchstart'].forEach(t => removeEventListener(t, onInteract, true));
+  }
+  const onInteract = () => cancelAuto();
+
+  // O servidor recusa batidas com menos de 1 min de intervalo: trava o botão com uma barra de progresso.
+  let coolTimer = null;
+  function startCooldown(c) {
+    const btn = $('punchBtn');
+    clearInterval(coolTimer);
+    const since = c && c.lastPunch ? Date.now() - c.lastPunch.at : Infinity;
+    if (since >= MIN_GAP_MS) {
+      btn.classList.remove('cooling'); btn.style.removeProperty('--p');
+      btn.disabled = false; btn.textContent = 'Bater ponto agora';
+      return;
+    }
+    btn.disabled = true; btn.classList.add('cooling');
+    const step = () => {
+      const elapsed = Date.now() - c.lastPunch.at;
+      if (elapsed >= MIN_GAP_MS) return startCooldown(c);
+      btn.style.setProperty('--p', (elapsed / MIN_GAP_MS * 100).toFixed(1) + '%');
+      btn.textContent = `Disponível em ${Math.ceil((MIN_GAP_MS - elapsed) / 1000)}s`;
+    };
+    step(); coolTimer = setInterval(step, 100);
+  }
+
+  $('autoToggle').addEventListener('change', e => {
+    const c = load(); if (!c) return;
+    c.auto = e.target.checked; save(c);
+    cancelAuto();
+    $('ringWrap').hidden = true;
+    $('hint').textContent = c.auto ? 'Registro automático ativado — vale a partir da próxima abertura.' : 'Registro automático desativado.';
+  });
+
+  // Marcações de hoje, lidas do portal pelo Worker (opcional: só se config.js tiver PONTO_TURNOS).
+  let todaySeq = 0;
+  async function loadToday(c) {
+    const url = window.PONTO_TURNOS;
+    if (!url || !c || !c.code || !c.pin) { $('today').hidden = true; return; }
+    const seq = ++todaySeq;
+    todayInflight++;
+    // Primeira carga: texto de carregamento. Depois: a lista continua visível, com o indicador ao lado de "Hoje:".
+    if (!todayLoaded) {
+      $('today').innerHTML = '<span class="today-note busy">Carregando histórico de hoje…</span>';
+      $('today').hidden = false;
+    } else renderToday();
+    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 30000);
+    try {
+      const r = await fetch(url.replace(/\/+$/, '') + '/hoje', {
+        method: 'POST', cache: 'no-store', signal: ctrl.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ codigo: c.code, pin: c.pin }),
+      });
+      const d = await r.json();
+      if (seq !== todaySeq) return;                 // chegou uma resposta mais nova
+      if (!r.ok || !Array.isArray(d.periodos)) throw new Error(d.erro || `HTTP ${r.status}`);
+      todayPeriods = d.periodos; todayLoaded = true;
+      renderToday();
+      $('today').hidden = false;
+    } catch (e) {
+      if (seq !== todaySeq) return;
+      console.warn('[ponto] marcações de hoje indisponíveis:', e.message);
+      // Mantém a lista se ela já foi carregada nesta sessão (falha só numa atualização).
+      if (!todayLoaded) {
+        $('today').innerHTML = '<span class="today-note">Não foi possível resgatar histórico de ponto do dia</span>';
+        $('today').hidden = false;
+      }
+    } finally {
+      clearTimeout(timer);
+      todayInflight--;
+      if (todayLoaded) renderToday();
+    }
+  }
+  // Total do dia: soma dos períodos; o período aberto conta até agora (saída hipotética).
+  let todayPeriods = [], todayLoaded = false, todayInflight = 0;
+  const toMin = hhmm => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };
+  const fmtDur = min => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+  function renderToday() {
+    const el = $('today');
+    const head = `<span${todayInflight > 0 ? ' class="busy"' : ''}>Hoje:</span>`;
+    if (!todayPeriods.length) { el.innerHTML = head + ' nenhuma marcação'; return; }
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    let total = 0, open = false;
+    for (const p of todayPeriods) {
+      const end = p.saida ? toMin(p.saida) : (open = true, nowMin);
+      let d = end - toMin(p.entrada);
+      if (d < 0) d += 24 * 60;                    // período que passou da meia-noite
+      total += d;
+    }
+    el.innerHTML = `${head} <span class="total${open ? ' open' : ''}" title="${open ? 'Contando até agora' : 'Total registrado'}">${fmtDur(total)}</span>`
+      + todayPeriods.map(p => `<div><b>${p.entrada}</b> – <b>${p.saida || '…'}</b></div>`).join('');
+  }
+  // Atualiza o total a cada 30 s enquanto houver período aberto.
+  setInterval(() => { if (todayPeriods.some(p => !p.saida) && !$('today').hidden) renderToday(); }, 30000);
+
+  // O Tangerino processa a batida em segundo plano: recarrega algumas vezes depois de bater.
+  const refreshTodayAfterPunch = c => [5000, 20000, 60000].forEach(ms => setTimeout(() => loadToday(c), ms));
+
+  function showRun(c, auto) {
+    $('setup').hidden = true; $('run').hidden = false;
+    $('who').textContent = c.name ? `Olá, ${c.name.split(' ')[0]}` : `Empregador ${c.code}`;
+    showLast(c);
+    startCooldown(c);
+    loadToday(c);
+    $('ringWrap').hidden = true;
+    $('hint').textContent = '';
+    $('autoToggle').checked = c.auto !== false;
+    if (!auto || c.auto === false) return;
+
+    if (c.lastPunch && Date.now() - c.lastPunch.at < MIN_GAP_MS) {
+      $('hint').textContent = 'Batida recente detectada — registro automático pausado.';
+      return;
+    }
+
+    const arc = $('arc'), len = 2 * Math.PI * 58;
+    arc.style.strokeDasharray = len;
+    $('ringWrap').hidden = false;
+    $('hint').textContent = 'Registrando automaticamente… toque para cancelar';
+    const start = performance.now();
+    const step = () => {
+      const left = Math.max(0, AUTO_SECONDS*1000 - (performance.now() - start));
+      $('count').textContent = Math.ceil(left/1000);
+      arc.style.strokeDashoffset = len * (1 - left/(AUTO_SECONDS*1000));
+      if (left <= 0) {
+        cancelAuto(' ');
+        $('hint').textContent = '';
+        doPunch(c, $('punchBtn'));
+      }
+    };
+    step(); timer = setInterval(step, 50);
+    ['pointerdown','keydown','wheel','touchstart'].forEach(t => addEventListener(t, onInteract, true));
+  }
+
+  $('punchBtn').addEventListener('click', () => { cancelAuto(' '); $('hint').textContent=''; doPunch(load(), $('punchBtn')); });
+  $('editBtn').addEventListener('click', () => { cancelAuto(); $('status').className='status'; showSetup(load()); });
+
+  // Pausa se o app for para segundo plano durante a contagem
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = Date.now(); cancelAuto('Registro automático cancelado (app em segundo plano).'); return; }
+    // No celular o PWA costuma ficar em memória: reabrir pelo ícone não recarrega a página.
+    // Se voltou após 30 s+ e não está no formulário, trata como nova abertura.
+    const c = load();
+    if (hiddenAt && Date.now() - hiddenAt > 30000 && c && c.code && c.pin && $('setup').hidden) {
+      $('status').className = 'status'; showRun(c, true);
+    }
+  });
+
+  const cfg = load();
+  if (cfg && cfg.code && cfg.pin) showRun(cfg, true); else showSetup(cfg);
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
