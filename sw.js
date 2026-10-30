@@ -1,7 +1,7 @@
 // Cache da interface. Chamadas à API (Tangerino / Worker) são de outros domínios e não passam por aqui.
 // Estratégia: tenta a rede (para pegar atualizações), mas usa o cache se a rede falhar,
 // devolver erro (ex.: GitHub Pages fora do ar) ou demorar mais que NET_TIMEOUT_MS.
-const CACHE = 'ponto-rapido-v22';
+const CACHE = 'ponto-rapido-v23';
 const SHELL = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png?v=2', 'icons/icon-512.png?v=2'];
 const NET_TIMEOUT_MS = 3000;
 

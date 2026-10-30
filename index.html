@@ -31,6 +31,7 @@
     background:linear-gradient(90deg,#3a3f48 var(--p,0%),#2a2e35 var(--p,0%))}
   .ring{position:relative;width:132px;height:132px;margin:4px auto 6px}
   .ring svg{transform:rotate(-90deg)}
+  .ring.stopped{opacity:.35;transition:opacity .15s}
   .ring .n{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:700}
   .hint{text-align:center;color:var(--mute);font-size:14px;margin:6px 0 0}
   .status{margin-top:16px;padding:12px 14px;border-radius:12px;font-size:15px;display:none}
@@ -266,15 +267,29 @@
   });
 
   // ---------- Acessos seguintes ----------
-  let timer = null;
-  function cancelAuto(reason) {
+  let timer = null, collapsePending = null;
+  // Recolhe o anel de contagem. Ao tocar na tela, a contagem para na hora, mas o layout só muda
+  // depois que o dedo sai da tela, para os botões não "pularem" para baixo do dedo no meio do toque.
+  function cancelAuto(reason, deferLayout = false) {
+    if (collapsePending && reason !== undefined) collapsePending.reason = reason;
     if (!timer) return;
     clearInterval(timer); timer = null;
-    $('ringWrap').hidden = true;
-    $('hint').textContent = reason || 'Registro automático cancelado.';
     ['pointerdown','keydown','wheel','touchstart'].forEach(t => removeEventListener(t, onInteract, true));
+    const pending = collapsePending = { reason };
+    const apply = () => {
+      if (collapsePending !== pending) return;
+      collapsePending = null;
+      ['pointerup','pointercancel'].forEach(t => removeEventListener(t, release, true));
+      $('ringWrap').hidden = true;
+      $('hint').textContent = pending.reason || 'Registro automático cancelado.';
+    };
+    const release = () => setTimeout(apply, 350);      // deixa o clique do toque chegar ao botão certo
+    if (!deferLayout) return apply();
+    $('ringWrap').classList.add('stopped');
+    ['pointerup','pointercancel'].forEach(t => addEventListener(t, release, true));
+    setTimeout(apply, 4000);                              // garantia, caso o "soltar" não chegue
   }
-  const onInteract = () => cancelAuto();
+  const onInteract = e => cancelAuto(undefined, e.type === 'pointerdown' || e.type === 'touchstart');
 
   // O servidor recusa batidas com menos de 1 min de intervalo: trava o botão com uma barra de progresso.
   let coolTimer = null;
@@ -387,6 +402,7 @@
 
     const arc = $('arc'), len = 2 * Math.PI * 58;
     arc.style.strokeDasharray = len;
+    $('ringWrap').classList.remove('stopped');
     $('ringWrap').hidden = false;
     $('hint').textContent = 'Registrando automaticamente… toque para cancelar';
     const start = performance.now();
@@ -404,7 +420,7 @@
     ['pointerdown','keydown','wheel','touchstart'].forEach(t => addEventListener(t, onInteract, true));
   }
 
-  $('punchBtn').addEventListener('click', () => { cancelAuto(' '); $('hint').textContent=''; doPunch(load(), $('punchBtn')); });
+  $('punchBtn').addEventListener('click', () => { cancelAuto(' '); if (!collapsePending) $('hint').textContent=''; doPunch(load(), $('punchBtn')); });
   $('editBtn').addEventListener('click', () => { cancelAuto(); $('status').className='status'; showSetup(load()); });
 
   // Pausa se o app for para segundo plano durante a contagem
